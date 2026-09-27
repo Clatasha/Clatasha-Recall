@@ -35,7 +35,8 @@ public final class RecallListener extends NotificationListenerService {
         long time = sbn.getPostTime();
         String sender = title.isEmpty() ? app : title;
         String fingerprint = digest(app + "\u0000" + sender + "\u0000" + body + "\u0000" + time);
-        writer.execute(() -> new RecallDatabase(getApplicationContext()).save(fingerprint, app, sender, body, time));
+        final String savedBody = body;
+        writer.execute(() -> new RecallDatabase(getApplicationContext()).save(fingerprint, app, sender, savedBody, time));
     }
 
     private static String clean(CharSequence value) {
