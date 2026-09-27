@@ -209,23 +209,66 @@ public final class MainActivity extends Activity {
             String pkg = result.activityInfo.packageName;
             if (!pkg.equals(getPackageName()) && seen.add(pkg)) installed.add(result.activityInfo.applicationInfo);
         }
-        installed.sort(Comparator.comparing(info -> pm.getApplicationLabel(info).toString().toLowerCase(java.util.Locale.ROOT)));
-        String[] names = new String[installed.size()];
+        installed.sort(Comparator.comparing(info -> pm.getApplicationLabel(info).toString()
+                .toLowerCase(java.util.Locale.ROOT)));
         Set<String> chosen = new HashSet<>(getSharedPreferences(RecallListener.PREFS, MODE_PRIVATE)
                 .getStringSet(RecallListener.SELECTED, java.util.Collections.emptySet()));
-        boolean[] checked = new boolean[installed.size()];
-        for (int i = 0; i < installed.size(); i++) {
-            names[i] = pm.getApplicationLabel(installed.get(i)).toString();
-            checked[i] = chosen.contains(installed.get(i).packageName);
-        }
-        new AlertDialog.Builder(this).setTitle("Save notifications from")
-                .setMultiChoiceItems(names, checked, (dialog, which, isChecked) -> {
-                    String pkg = installed.get(which).packageName;
-                    if (isChecked) chosen.add(pkg); else chosen.remove(pkg);
-                }).setPositiveButton("Save", (dialog, which) ->
+
+        LinearLayout picker = column();
+        picker.setPadding(dp(14), dp(8), dp(14), 0);
+        EditText filter = new EditText(this);
+        filter.setSingleLine(true);
+        filter.setHint("Search apps");
+        filter.setTextColor(WHITE);
+        filter.setHintTextColor(MUTED);
+        filter.setBackground(gradient(0xff22334b, 0xff17263d, dp(12), 0xff45607d));
+        filter.setPadding(dp(14), 0, dp(14), 0);
+        picker.addView(filter, new LinearLayout.LayoutParams(-1, dp(50)));
+        ScrollView listScroll = new ScrollView(this);
+        LinearLayout.LayoutParams listSpace = new LinearLayout.LayoutParams(-1, dp(390));
+        listSpace.topMargin = dp(8);
+        picker.addView(listScroll, listSpace);
+        LinearLayout list = column();
+        listScroll.addView(list);
+        Runnable populate = () -> {
+            list.removeAllViews();
+            String term = filter.getText().toString().trim().toLowerCase(java.util.Locale.ROOT);
+            for (ApplicationInfo info : installed) {
+                String name = pm.getApplicationLabel(info).toString();
+                if (!name.toLowerCase(java.util.Locale.ROOT).contains(term)
+                        && !info.packageName.toLowerCase(java.util.Locale.ROOT).contains(term)) continue;
+                CheckBox box = new CheckBox(this);
+                box.setText(name);
+                box.setTextColor(WHITE);
+                box.setButtonTintList(android.content.res.ColorStateList.valueOf(MINT));
+                box.setChecked(chosen.contains(info.packageName));
+                box.setPadding(dp(8), dp(8), dp(8), dp(8));
+                box.setOnCheckedChangeListener((button, checked) -> {
+                    if (checked) chosen.add(info.packageName);
+                    else chosen.remove(info.packageName);
+                });
+                list.addView(box);
+            }
+        };
+        populate.run();
+        filter.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(CharSequence value, int start, int count, int after) {}
+            public void onTextChanged(CharSequence value, int start, int before, int count) {
+                populate.run();
+                listScroll.scrollTo(0, 0);
+            }
+            public void afterTextChanged(Editable value) {}
+        });
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Choose apps to save")
+                .setView(picker)
+                .setPositiveButton("Save", (d, which) ->
                         getSharedPreferences(RecallListener.PREFS, MODE_PRIVATE).edit()
                                 .putStringSet(RecallListener.SELECTED, chosen).apply())
-                .setNegativeButton("Cancel", null).show();
+                .setNegativeButton("Cancel", null).create();
+        dialog.setOnShowListener(ignored ->
+                dialog.getWindow().setBackgroundDrawable(gradient(0xff1b2d46, 0xff101d32, dp(20), 0xff41627e)));
+        dialog.show();
     }
 
     private void confirmClear() {
