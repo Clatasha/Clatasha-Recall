@@ -99,5 +99,25 @@ final class RecallDatabase extends SQLiteOpenHelper {
                 + "AND ABS(previous.event_time - entries.event_time) <= 3000)");
     }
 
+    synchronized int cleanup(int days) {
+        if (days <= 0) return 0;
+        long cutoff = System.currentTimeMillis() - days * 86400000L;
+        return getWritableDatabase().delete("entries", "archived=0 AND event_time<?",
+                new String[]{Long.toString(cutoff)});
+    }
+
+    synchronized List<Entry> allForExport() {
+        List<Entry> entries = new ArrayList<>();
+        try (Cursor cursor = getReadableDatabase().query("entries",
+                new String[]{"id", "fingerprint", "app", "sender", "body", "event_time", "archived"},
+                null, null, null, null, "event_time ASC, id ASC")) {
+            while (cursor.moveToNext()) {
+                entries.add(new Entry(cursor.getLong(0), cursor.getString(1), cursor.getString(2),
+                        cursor.getString(3), cursor.getString(4), cursor.getLong(5), cursor.getInt(6) == 1));
+            }
+        }
+        return entries;
+    }
+
     synchronized void clear() { getWritableDatabase().delete("entries", null, null); }
 }
