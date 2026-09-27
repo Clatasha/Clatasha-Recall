@@ -43,7 +43,7 @@ final class RecallDatabase extends SQLiteOpenHelper {
         String[] args = query.isEmpty() ? null : new String[]{like, like, like};
         try (Cursor cursor = getReadableDatabase().query("entries",
                 new String[]{"app", "sender", "body", "event_time"}, clause, args,
-                null, null, "event_time DESC, id DESC", "500")) {
+                null, null, "app ASC, sender ASC, event_time DESC, id DESC", "500")) {
             while (cursor.moveToNext()) {
                 entries.add(new Entry(cursor.getString(0), cursor.getString(1), cursor.getString(2), cursor.getLong(3)));
             }
