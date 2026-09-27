@@ -376,6 +376,38 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams detailSpace = new LinearLayout.LayoutParams(-1, -2);
         detailSpace.topMargin = dp(12);
         panel.addView(detail, detailSpace);
+
+        TextView retention = settingsOption("Auto clean up   •   " + retentionLabel(RetentionJob.days(this)));
+        LinearLayout.LayoutParams optionSpace = new LinearLayout.LayoutParams(-1, -2);
+        optionSpace.topMargin = dp(13);
+        panel.addView(retention, optionSpace);
+        retention.setOnClickListener(v -> chooseRetention(retention));
+
+        TextView lock = settingsOption(lockEnabled() ? "App lock   •   On" : "App lock   •   Off");
+        LinearLayout.LayoutParams lockSpace = new LinearLayout.LayoutParams(-1, -2);
+        lockSpace.topMargin = dp(10);
+        panel.addView(lock, lockSpace);
+        lock.setOnClickListener(v -> {
+            if (lockEnabled()) {
+                new AlertDialog.Builder(this).setTitle("Turn off app lock?")
+                        .setPositiveButton("Turn off", (d, which) -> {
+                            getSharedPreferences("recall_settings", MODE_PRIVATE).edit()
+                                    .putBoolean("app_lock", false).apply();
+                            lock.setText("App lock   •   Off");
+                            rootView.setVisibility(View.VISIBLE);
+                        }).setNegativeButton("Cancel", null).show();
+            } else {
+                requestUnlock(true);
+                lock.setText("App lock   •   On");
+            }
+        });
+
+        TextView export = settingsOption("Export encrypted history");
+        LinearLayout.LayoutParams exportSpace = new LinearLayout.LayoutParams(-1, -2);
+        exportSpace.topMargin = dp(10);
+        panel.addView(export, exportSpace);
+        export.setOnClickListener(v -> startPrivateExport());
+
         TextView title = label("Recall settings", 20, WHITE, true, 0);
         title.setPadding(dp(22), dp(20), dp(20), dp(8));
         AlertDialog dialog = new AlertDialog.Builder(this).setCustomTitle(title)
