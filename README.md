@@ -6,7 +6,7 @@ A private, on-device Android notification history app. Clatasha Recall saves not
 
 A first, untested Android prototype is available. The [Android debug build](https://github.com/Clatasha/Clatasha-Recall/actions/workflows/android.yml) uploads an APK artifact after each successful build. This is for device testing, not a public release. There is no media recovery, deletion detection, ads or automatic retention yet.
 
-## Prototype features\n\n- Select installed apps to monitor, grant notification access and capture visible text from new notifications.\n- Save text locally in app-private SQLite storage, with search and a delete-all control.\n- Show saved entries grouped by app and notification title.\n\n## Planned first release
+## Prototype features\n\n- Select installed apps to monitor, grant notification access and capture visible text from new notifications.\n- Save text locally in app-private SQLite storage, with search and a delete-all control.\n- Show saved entries grouped by app and notification title in a dark card interface.\n- Collapse immediate notification reposts and clean up existing matching duplicates.\n- Use a rewind notification launcher icon.\n\n## Planned first release
 
 - Capture new notifications from selected apps with Android's `NotificationListenerService`.
 - Store text, sender/conversation, app, and time in a local database.
