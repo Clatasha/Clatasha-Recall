@@ -4,20 +4,28 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.NotificationManager;
 import android.content.ComponentName;
+import android.content.Context;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
-import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.Gravity;
+import android.view.MotionEvent;
+import android.view.ViewConfiguration;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.CheckBox;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -43,6 +51,17 @@ public final class MainActivity extends Activity {
     private LinearLayout results;
     private EditText search;
     private RecallDatabase database;
+    private ScrollView historyScroll;
+    private TextView undoBar;
+    private final Set<String> expanded = new HashSet<>();
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private Runnable hideUndo;
+    private Runnable undoAction;
+    private final BroadcastReceiver historyReceiver = new BroadcastReceiver() {
+        @Override public void onReceive(Context context, Intent intent) {
+            if (RecallListener.ACTION_HISTORY_CHANGED.equals(intent.getAction())) refresh();
+        }
+    };
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -75,7 +94,7 @@ public final class MainActivity extends Activity {
         header.addView(heading, headSpace);
         heading.addView(label("CLATASHA", 11, MINT, true, 0));
         heading.addView(label("Recall", 29, WHITE, true, 0));
-        heading.addView(label("BUILD 0.1.1", 10, MUTED, true, 0));
+        heading.addView(label("BUILD 0.1.2", 10, MUTED, true, 0));
 
         TextView tagline = label("YOUR MOMENTS, KEPT CLOSE", 10, MUTED, true, 0);
         LinearLayout.LayoutParams tagSpace = new LinearLayout.LayoutParams(-1, -2);
@@ -135,19 +154,38 @@ public final class MainActivity extends Activity {
         sectionSpace.bottomMargin = dp(10);
         root.addView(section, sectionSpace);
 
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
-        scroll.setClipToPadding(false);
-        scroll.setVerticalScrollBarEnabled(false);
-        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        historyScroll = new ScrollView(this);
+        historyScroll.setFillViewport(true);
+        historyScroll.setClipToPadding(false);
+        historyScroll.setVerticalScrollBarEnabled(false);
+        root.addView(historyScroll, new LinearLayout.LayoutParams(-1, 0, 1));
         results = column();
         results.setPadding(0, dp(2), 0, dp(18));
-        scroll.addView(results);
+        historyScroll.addView(results);
+        undoBar = label("", 13, WHITE, true, Gravity.CENTER_VERTICAL);
+        undoBar.setPadding(dp(16), 0, dp(16), 0);
+        undoBar.setBackground(gradient(0xff234a55, 0xff15333c, dp(15), 0xff4a8d82));
+        undoBar.setVisibility(View.GONE);
+        LinearLayout.LayoutParams undoSpace = new LinearLayout.LayoutParams(-1, dp(48));
+        undoSpace.topMargin = dp(8);
+        root.addView(undoBar, undoSpace);
         search.addTextChangedListener(new TextWatcher() {
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             public void onTextChanged(CharSequence s, int start, int before, int count) { refresh(); }
             public void afterTextChanged(Editable editable) {}
         });
+    }
+
+    @Override protected void onStart() {
+        super.onStart();
+        IntentFilter filter = new IntentFilter(RecallListener.ACTION_HISTORY_CHANGED);
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(historyReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        else registerReceiver(historyReceiver, filter);
+    }
+
+    @Override protected void onStop() {
+        unregisterReceiver(historyReceiver);
+        super.onStop();
     }
 
     @Override protected void onResume() {
