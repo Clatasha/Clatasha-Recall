@@ -61,6 +61,7 @@ public final class MainActivity extends Activity {
     private LinearLayout rootView;
     private boolean authInProgress;
     private Uri pendingExportUri;
+    private TextView lockOption;
     private TextView status;
     private LinearLayout results;
     private EditText search;
@@ -314,8 +315,11 @@ public final class MainActivity extends Activity {
     private void completeUnlock(boolean success, boolean enabling) {
         authInProgress = false;
         if (success) {
-            if (enabling) getSharedPreferences("recall_settings", MODE_PRIVATE).edit()
-                    .putBoolean("app_lock", true).apply();
+            if (enabling) {
+                getSharedPreferences("recall_settings", MODE_PRIVATE).edit()
+                        .putBoolean("app_lock", true).apply();
+                if (lockOption != null) lockOption.setText("App lock   •   On");
+            }
             rootView.setVisibility(View.VISIBLE);
             if (pendingExportUri != null) {
                 Uri target = pendingExportUri;
@@ -387,6 +391,7 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams lockSpace = new LinearLayout.LayoutParams(-1, -2);
         lockSpace.topMargin = dp(10);
         panel.addView(lock, lockSpace);
+        lockOption = lock;
         lock.setOnClickListener(v -> {
             if (lockEnabled()) {
                 new AlertDialog.Builder(this).setTitle("Turn off app lock?")
@@ -398,7 +403,6 @@ public final class MainActivity extends Activity {
                         }).setNegativeButton("Cancel", null).show();
             } else {
                 requestUnlock(true);
-                lock.setText("App lock   •   On");
             }
         });
 
