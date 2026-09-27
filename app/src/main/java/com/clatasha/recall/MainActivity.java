@@ -31,6 +31,7 @@ import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.ViewConfiguration;
+import android.view.WindowManager;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.CheckBox;
@@ -95,6 +96,7 @@ public final class MainActivity extends Activity {
         super.onCreate(state);
         getWindow().setStatusBarColor(BACK);
         getWindow().setNavigationBarColor(BACK);
+        if (lockEnabled()) getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         database = new RecallDatabase(this);
         database.removeOldReposts();
         database.cleanup(RetentionJob.days(this));
@@ -251,6 +253,11 @@ public final class MainActivity extends Activity {
         }
     }
 
+    @Override protected void onPause() {
+        if (lockEnabled() && !authInProgress) rootView.setVisibility(View.INVISIBLE);
+        super.onPause();
+    }
+
     @Override protected void onStop() {
         unregisterReceiver(historyReceiver);
         handler.removeCallbacks(rotateAds);
@@ -319,6 +326,7 @@ public final class MainActivity extends Activity {
                 getSharedPreferences("recall_settings", MODE_PRIVATE).edit()
                         .putBoolean("app_lock", true).apply();
                 if (lockOption != null) lockOption.setText("App lock   •   On");
+                getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
             }
             rootView.setVisibility(View.VISIBLE);
             if (pendingExportUri != null) {
@@ -399,6 +407,7 @@ public final class MainActivity extends Activity {
                             getSharedPreferences("recall_settings", MODE_PRIVATE).edit()
                                     .putBoolean("app_lock", false).apply();
                             lock.setText("App lock   •   Off");
+                            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
                             rootView.setVisibility(View.VISIBLE);
                         }).setNegativeButton("Cancel", null).show();
             } else {
