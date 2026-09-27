@@ -8,6 +8,7 @@ import android.content.Context;
 import android.content.BroadcastReceiver;
 import android.content.IntentFilter;
 import android.content.Intent;
+import android.net.Uri;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
@@ -53,6 +54,18 @@ public final class MainActivity extends Activity {
     private RecallDatabase database;
     private ScrollView historyScroll;
     private TextView undoBar;
+    private LinearLayout adSlot;
+    private ImageView adImage;
+    private TextView adCaption;
+    private int adIndex = 0;
+    private final Runnable rotateAds = new Runnable() {
+        @Override public void run() {
+            if (!adsEnabled()) return;
+            adIndex = (adIndex + 1) % 2;
+            showBanner();
+            handler.postDelayed(this, 20000);
+        }
+    };
     private boolean archiveOpen = false;
     private final Set<String> expanded = new HashSet<>();
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -96,6 +109,14 @@ public final class MainActivity extends Activity {
         heading.addView(label("CLATASHA", 11, MINT, true, 0));
         heading.addView(label("Recall", 29, WHITE, true, 0));
         heading.addView(label("BUILD 0.1.3", 10, MUTED, true, 0));
+        ImageView gear = new ImageView(this);
+        gear.setImageResource(android.R.drawable.ic_menu_manage);
+        gear.setColorFilter(MINT);
+        gear.setPadding(dp(10), dp(10), dp(10), dp(10));
+        gear.setBackground(gradient(0xff253b53, 0xff14273e, dp(13), 0xff3c5873));
+        gear.setContentDescription("Settings");
+        gear.setOnClickListener(v -> showSettings());
+        header.addView(gear, new LinearLayout.LayoutParams(dp(43), dp(43)));
 
         TextView tagline = label("YOUR MOMENTS, KEPT CLOSE", 10, MUTED, true, 0);
         LinearLayout.LayoutParams tagSpace = new LinearLayout.LayoutParams(-1, -2);
@@ -149,6 +170,29 @@ public final class MainActivity extends Activity {
         searchSpace.topMargin = dp(22);
         root.addView(search, searchSpace);
 
+        adSlot = column();
+        adSlot.setPadding(dp(9), dp(7), dp(9), dp(9));
+        adSlot.setBackground(gradient(0xff263b55, 0xff14263d, dp(17), 0xff42627e));
+        adSlot.setElevation(dp(5));
+        LinearLayout.LayoutParams adSpace = new LinearLayout.LayoutParams(-1, -2);
+        adSpace.topMargin = dp(15);
+        root.addView(adSlot, adSpace);
+        adCaption = label("", 10, MUTED, true, 0);
+        adCaption.setPadding(dp(3), 0, 0, dp(6));
+        adSlot.addView(adCaption);
+        adImage = new ImageView(this);
+        adImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        adImage.setBackground(gradient(0xff1c304a, 0xff172941, dp(11), 0));
+        adSlot.addView(adImage, new LinearLayout.LayoutParams(-1, dp(106)));
+        adSlot.setOnClickListener(v -> {
+            String url = adIndex == 0
+                    ? "https://secure.bowetech.com/billing/store/web-hosting-packages/basic-web-hosting"
+                    : "https://sideurl.com/f/sideurl/advertisement-contact";
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        });
+        showBanner();
+        adSlot.setVisibility(adsEnabled() ? View.VISIBLE : View.GONE);
+
         TextView section = label("SAVED MOMENTS", 11, MINT, true, 0);
         LinearLayout.LayoutParams sectionSpace = new LinearLayout.LayoutParams(-1, -2);
         sectionSpace.topMargin = dp(23);
@@ -182,10 +226,15 @@ public final class MainActivity extends Activity {
         IntentFilter filter = new IntentFilter(RecallListener.ACTION_HISTORY_CHANGED);
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(historyReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         else registerReceiver(historyReceiver, filter);
+        if (adsEnabled()) {
+            handler.removeCallbacks(rotateAds);
+            handler.postDelayed(rotateAds, 20000);
+        }
     }
 
     @Override protected void onStop() {
         unregisterReceiver(historyReceiver);
+        handler.removeCallbacks(rotateAds);
         super.onStop();
     }
 
