@@ -259,15 +259,20 @@ public final class MainActivity extends Activity {
             }
             public void afterTextChanged(Editable value) {}
         });
+        TextView pickerTitle = label("Choose apps to save", 19, WHITE, true, 0);
+        pickerTitle.setPadding(dp(22), dp(20), dp(20), dp(8));
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("Choose apps to save")
+                .setCustomTitle(pickerTitle)
                 .setView(picker)
                 .setPositiveButton("Save", (d, which) ->
                         getSharedPreferences(RecallListener.PREFS, MODE_PRIVATE).edit()
                                 .putStringSet(RecallListener.SELECTED, chosen).apply())
                 .setNegativeButton("Cancel", null).create();
-        dialog.setOnShowListener(ignored ->
-                dialog.getWindow().setBackgroundDrawable(gradient(0xff1b2d46, 0xff101d32, dp(20), 0xff41627e)));
+        dialog.setOnShowListener(ignored -> {
+            dialog.getWindow().setBackgroundDrawable(gradient(0xff1b2d46, 0xff101d32, dp(20), 0xff41627e));
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(MINT);
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(MUTED);
+        });
         dialog.show();
     }
 
