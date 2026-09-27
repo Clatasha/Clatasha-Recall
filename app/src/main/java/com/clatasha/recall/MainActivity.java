@@ -3,6 +3,9 @@ package com.clatasha.recall;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.NotificationManager;
+import android.app.KeyguardManager;
+import android.hardware.biometrics.BiometricPrompt;
+import android.hardware.biometrics.BiometricManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.BroadcastReceiver;
@@ -18,6 +21,10 @@ import android.os.Bundle;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.CancellationSignal;
+import android.text.InputType;
+import android.widget.Toast;
+import java.util.Arrays;
 import android.provider.Settings;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -48,6 +55,12 @@ public final class MainActivity extends Activity {
     private static final int WHITE = 0xfff2f8ff;
     private static final int MUTED = 0xff9bb0c9;
     private static final int MINT = 0xff6df1d3;
+    private static final int REQUEST_UNLOCK = 410;
+    private static final int REQUEST_ENABLE_LOCK = 411;
+    private static final int REQUEST_EXPORT = 412;
+    private LinearLayout rootView;
+    private boolean authInProgress;
+    private Uri pendingExportUri;
     private TextView status;
     private LinearLayout results;
     private EditText search;
@@ -83,11 +96,15 @@ public final class MainActivity extends Activity {
         getWindow().setNavigationBarColor(BACK);
         database = new RecallDatabase(this);
         database.removeOldReposts();
+        database.cleanup(RetentionJob.days(this));
+        RetentionJob.schedule(this);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(20), dp(18), dp(20), dp(12));
         root.setBackground(gradient(BACK, 0xff101d32, 0, 0));
+        rootView = root;
+        if (lockEnabled()) root.setVisibility(View.INVISIBLE);
         setContentView(root);
 
         LinearLayout header = new LinearLayout(this);
@@ -108,7 +125,7 @@ public final class MainActivity extends Activity {
         header.addView(heading, headSpace);
         heading.addView(label("CLATASHA", 11, MINT, true, 0));
         heading.addView(label("Recall", 29, WHITE, true, 0));
-        heading.addView(label("BUILD 0.1.3", 10, MUTED, true, 0));
+        heading.addView(label("BUILD 0.1.4", 10, MUTED, true, 0));
         ImageView gear = new ImageView(this);
         gear.setImageResource(android.R.drawable.ic_menu_manage);
         gear.setColorFilter(MINT);
@@ -226,6 +243,7 @@ public final class MainActivity extends Activity {
         IntentFilter filter = new IntentFilter(RecallListener.ACTION_HISTORY_CHANGED);
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(historyReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         else registerReceiver(historyReceiver, filter);
+        if (lockEnabled() && !authInProgress) requestUnlock(false);
         if (adsEnabled()) {
             handler.removeCallbacks(rotateAds);
             handler.postDelayed(rotateAds, 20000);
@@ -235,6 +253,7 @@ public final class MainActivity extends Activity {
     @Override protected void onStop() {
         unregisterReceiver(historyReceiver);
         handler.removeCallbacks(rotateAds);
+        if (lockEnabled()) rootView.setVisibility(View.INVISIBLE);
         super.onStop();
     }
 
