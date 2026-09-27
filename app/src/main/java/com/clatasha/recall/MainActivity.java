@@ -280,94 +280,192 @@ public final class MainActivity extends Activity {
 
     private void refresh() {
         if (results == null || search == null) return;
+        int scrollY = historyScroll.getScrollY();
         results.removeAllViews();
         List<RecallDatabase.Entry> entries = database.search(search.getText().toString().trim());
-        if (entries.isEmpty()) {
+        Map<String, List<RecallDatabase.Entry>> saved = new LinkedHashMap<>();
+        Map<String, List<RecallDatabase.Entry>> archived = new LinkedHashMap<>();
+        for (RecallDatabase.Entry entry : entries) {
+            Map<String, List<RecallDatabase.Entry>> section = entry.archived ? archived : saved;
+            String key = entry.app + "\u0000" + entry.sender;
+            section.computeIfAbsent(key, ignored -> new ArrayList<>()).add(entry);
+        }
+        if (saved.isEmpty()) {
             LinearLayout empty = column();
             empty.setGravity(Gravity.CENTER);
-            empty.setPadding(dp(20), dp(35), dp(20), dp(35));
+            empty.setPadding(dp(20), dp(26), dp(20), dp(26));
             empty.setBackground(gradient(PANEL, 0xff102035, dp(20), 0xff2d4663));
-            empty.addView(label("◷", 34, MINT, false, Gravity.CENTER));
-            empty.addView(label("Nothing saved yet", 20, WHITE, true, Gravity.CENTER));
-            TextView help = label("Choose an app and enable access. New notifications will appear here.", 13, MUTED, false, Gravity.CENTER);
-            LinearLayout.LayoutParams helpSpace = new LinearLayout.LayoutParams(-1, -2);
-            helpSpace.topMargin = dp(8);
-            empty.addView(help, helpSpace);
+            empty.addView(label("◷", 32, MINT, false, Gravity.CENTER));
+            empty.addView(label("No saved notifications", 18, WHITE, true, Gravity.CENTER));
+            empty.addView(label("Choose an app and enable access to start saving.", 12, MUTED, false, Gravity.CENTER));
             results.addView(empty);
-            return;
-        }
+        } else for (List<RecallDatabase.Entry> group : saved.values()) addConversation(group, false);
 
-        Map<String, List<RecallDatabase.Entry>> groups = new LinkedHashMap<>();
-        for (RecallDatabase.Entry entry : entries) {
-            groups.computeIfAbsent(entry.app + "\u0000" + entry.sender, key -> new ArrayList<>()).add(entry);
-        }
-        for (List<RecallDatabase.Entry> group : groups.values()) addConversation(group);
+        int archivedCount = 0;
+        for (List<RecallDatabase.Entry> group : archived.values()) archivedCount += group.size();
+        TextView archiveTitle = label("ARCHIVE  ·  " + archivedCount, 11, MINT, true, 0);
+        LinearLayout.LayoutParams archiveSpace = new LinearLayout.LayoutParams(-1, -2);
+        archiveSpace.topMargin = dp(20);
+        archiveSpace.bottomMargin = dp(12);
+        results.addView(archiveTitle, archiveSpace);
+        if (archived.isEmpty()) {
+            results.addView(label("Archived notifications will appear here.", 12, MUTED, false, 0));
+        } else for (List<RecallDatabase.Entry> group : archived.values()) addConversation(group, true);
+        historyScroll.post(() -> historyScroll.scrollTo(0, scrollY));
     }
 
-    private void addConversation(List<RecallDatabase.Entry> group) {
+    private void addConversation(List<RecallDatabase.Entry> group, boolean isArchive) {
         RecallDatabase.Entry first = group.get(0);
+        String key = (isArchive ? "archive:" : "saved:") + first.app + "\u0000" + first.sender;
+        boolean open = expanded.contains(key);
         LinearLayout card = column();
-        card.setPadding(dp(16), dp(15), dp(16), dp(15));
         card.setBackground(gradient(0xff20334e, 0xff14243b, dp(20), 0xff354e6d));
         card.setElevation(dp(6));
         LinearLayout.LayoutParams cardSpace = new LinearLayout.LayoutParams(-1, -2);
-        cardSpace.bottomMargin = dp(14);
+        cardSpace.bottomMargin = dp(12);
         results.addView(card, cardSpace);
 
-        LinearLayout row = row();
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        card.addView(row);
+        LinearLayout top = row();
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        top.setPadding(dp(14), dp(13), dp(14), dp(13));
+        card.addView(top);
         ImageView appIcon = new ImageView(this);
         try { appIcon.setImageDrawable(getPackageManager().getApplicationIcon(first.app)); }
         catch (PackageManager.NameNotFoundException ignored) {
             appIcon.setImageResource(isWhatsApp(first.app) ? R.drawable.ic_chat_fallback : R.drawable.ic_recall_mark);
         }
         appIcon.setContentDescription("Source app");
-        appIcon.setPadding(dp(8), dp(8), dp(8), dp(8));
-        appIcon.setBackground(gradient(0xff344c67, 0xff223952, dp(13), 0xff4a6882));
-        row.addView(appIcon, new LinearLayout.LayoutParams(dp(44), dp(44)));
+        appIcon.setPadding(dp(7), dp(7), dp(7), dp(7));
+        appIcon.setBackground(gradient(0xff344c67, 0xff223952, dp(12), 0xff4a6882));
+        top.addView(appIcon, new LinearLayout.LayoutParams(dp(45), dp(45)));
 
         LinearLayout titles = column();
         LinearLayout.LayoutParams titleSpace = new LinearLayout.LayoutParams(0, -2, 1);
-        titleSpace.leftMargin = dp(12);
-        row.addView(titles, titleSpace);
-        TextView sender = label(first.sender, 17, WHITE, true, 0);
+        titleSpace.leftMargin = dp(11);
+        top.addView(titles, titleSpace);
+        String appName = displayName(first.app);
+        TextView sender = label(appName + "  ·  " + first.sender, 15, WHITE, true, 0);
         sender.setMaxLines(1);
         sender.setEllipsize(android.text.TextUtils.TruncateAt.END);
         titles.addView(sender);
-        String appName = first.app;
-        try {
-            appName = getPackageManager().getApplicationLabel(
-                    getPackageManager().getApplicationInfo(first.app, 0)).toString();
-        } catch (PackageManager.NameNotFoundException ignored) {}
-        if (appName.equals(first.app)) {
-            if (first.app.equals("com.whatsapp.w4b")) appName = "WhatsApp Business";
-            else if (first.app.equals("com.whatsapp")) appName = "WhatsApp";
-        }
-        titles.addView(label(appName, 11, MUTED, false, 0));
+        TextView preview = label(first.text, 12, MUTED, false, 0);
+        preview.setMaxLines(1);
+        preview.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        titles.addView(preview);
+        TextView count = label(group.size() + (open ? "  ⌃" : "  ⌄"), 12, MINT, true, Gravity.CENTER);
+        count.setMinWidth(dp(42));
+        top.addView(count);
+        top.setContentDescription(appName + ", " + first.sender + ", " + group.size()
+                + " notifications. " + (open ? "Collapse" : "Expand"));
+        top.setOnClickListener(v -> {
+            if (expanded.contains(key)) expanded.remove(key);
+            else expanded.add(key);
+            refresh();
+        });
+        if (!open) return;
+        for (RecallDatabase.Entry entry : group) addNotification(card, entry);
+    }
 
-        TextView count = label(String.valueOf(group.size()), 12, MINT, true, Gravity.CENTER);
-        count.setBackground(gradient(0xff173d46, 0xff14313a, dp(13), 0xff38766f));
-        row.addView(count, new LinearLayout.LayoutParams(dp(29), dp(26)));
+    private void addNotification(LinearLayout card, RecallDatabase.Entry entry) {
+        View line = new View(this);
+        line.setBackgroundColor(0xff344861);
+        card.addView(line, new LinearLayout.LayoutParams(-1, dp(1)));
+        LinearLayout item = column();
+        item.setPadding(dp(16), dp(11), dp(16), dp(11));
+        card.addView(item);
+        item.addView(label(entry.text, 14, WHITE, false, 0));
+        String time = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+                .format(new Date(entry.time));
+        TextView meta = label(time + "    •    Swipe → " + (entry.archived ? "Restore" : "Archive")
+                + "    ← Delete", 10, MUTED, false, 0);
+        LinearLayout.LayoutParams metaSpace = new LinearLayout.LayoutParams(-1, -2);
+        metaSpace.topMargin = dp(6);
+        item.addView(meta, metaSpace);
+        attachSwipe(item, entry);
+    }
 
-        for (int i = 0; i < group.size(); i++) {
-            RecallDatabase.Entry entry = group.get(i);
-            if (i > 0) {
-                View line = new View(this);
-                line.setBackgroundColor(0xff344861);
-                LinearLayout.LayoutParams lineSpace = new LinearLayout.LayoutParams(-1, dp(1));
-                lineSpace.topMargin = dp(12);
-                card.addView(line, lineSpace);
+    private void attachSwipe(View item, RecallDatabase.Entry entry) {
+        int slop = ViewConfiguration.get(this).getScaledTouchSlop();
+        item.setOnTouchListener(new View.OnTouchListener() {
+            float startX, startY;
+            boolean dragging;
+            @Override public boolean onTouch(View view, MotionEvent event) {
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        startX = event.getX(); startY = event.getY(); dragging = false;
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        float dx = event.getX() - startX;
+                        float dy = event.getY() - startY;
+                        if (!dragging && Math.abs(dx) > slop && Math.abs(dx) > Math.abs(dy)) {
+                            dragging = true;
+                            view.getParent().requestDisallowInterceptTouchEvent(true);
+                        }
+                        if (dragging) {
+                            view.setTranslationX(Math.max(-dp(115), Math.min(dp(115), dx)));
+                            return true;
+                        }
+                        break;
+                    case MotionEvent.ACTION_UP:
+                        float distance = event.getX() - startX;
+                        view.animate().translationX(0).setDuration(160).start();
+                        if (dragging && Math.abs(distance) >= dp(75)) {
+                            applySwipe(entry, distance > 0);
+                        } else if (!dragging) {
+                            new AlertDialog.Builder(MainActivity.this)
+                                    .setMessage(entry.text)
+                                    .setPositiveButton(entry.archived ? "Restore" : "Archive",
+                                            (dialog, which) -> applySwipe(entry, true))
+                                    .setNegativeButton("Delete", (dialog, which) -> applySwipe(entry, false))
+                                    .show();
+                        }
+                        return true;
+                    case MotionEvent.ACTION_CANCEL:
+                        view.animate().translationX(0).setDuration(160).start();
+                        return true;
+                }
+                return true;
             }
-            TextView message = label(entry.text, 14, WHITE, false, 0);
-            LinearLayout.LayoutParams messageSpace = new LinearLayout.LayoutParams(-1, -2);
-            messageSpace.topMargin = dp(11);
-            card.addView(message, messageSpace);
-            TextView time = label(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
-                    .format(new Date(entry.time)), 11, MUTED, false, 0);
-            LinearLayout.LayoutParams timeSpace = new LinearLayout.LayoutParams(-1, -2);
-            timeSpace.topMargin = dp(6);
-            card.addView(time, timeSpace);
+        });
+    }
+
+    private void applySwipe(RecallDatabase.Entry entry, boolean toArchive) {
+        Runnable reverse;
+        String title;
+        if (toArchive) {
+            boolean newState = !entry.archived;
+            database.setArchived(entry.id, newState);
+            reverse = () -> database.setArchived(entry.id, entry.archived);
+            title = newState ? "Archived" : "Restored";
+        } else {
+            database.delete(entry.id);
+            reverse = () -> database.restore(entry);
+            title = "Deleted";
+        }
+        refresh();
+        if (hideUndo != null) handler.removeCallbacks(hideUndo);
+        undoAction = reverse;
+        undoBar.setText(title + "   ·   UNDO");
+        undoBar.setVisibility(View.VISIBLE);
+        undoBar.setOnClickListener(v -> {
+            if (undoAction != null) undoAction.run();
+            undoAction = null;
+            if (hideUndo != null) handler.removeCallbacks(hideUndo);
+            undoBar.setVisibility(View.GONE);
+            refresh();
+        });
+        hideUndo = () -> { undoAction = null; undoBar.setVisibility(View.GONE); };
+        handler.postDelayed(hideUndo, 6000);
+    }
+
+    private String displayName(String pkg) {
+        try {
+            return getPackageManager().getApplicationLabel(
+                    getPackageManager().getApplicationInfo(pkg, 0)).toString();
+        } catch (PackageManager.NameNotFoundException ignored) {
+            if (pkg.equals("com.whatsapp.w4b")) return "WhatsApp Business";
+            if (pkg.equals("com.whatsapp")) return "WhatsApp";
+            return pkg;
         }
     }
 
