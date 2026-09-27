@@ -434,6 +434,101 @@ public final class MainActivity extends Activity {
         dialog.show();
     }
 
+    private TextView settingsOption(String text) {
+        TextView view = label(text, 15, WHITE, true, Gravity.CENTER_VERTICAL);
+        view.setPadding(dp(12), dp(15), dp(12), dp(15));
+        view.setBackground(gradient(0xff263b54, 0xff182a42, dp(13), 0xff3e5c78));
+        return view;
+    }
+
+    private String retentionLabel(int days) {
+        return days == 0 ? "Off" : days + " days";
+    }
+
+    private void chooseRetention(TextView option) {
+        int[] values = {0, 7, 30, 90, 365};
+        String[] choices = {"Off — keep saved notifications",
+                "7 days", "30 days", "90 days", "365 days"};
+        new AlertDialog.Builder(this).setTitle("Auto clean up")
+                .setMessage("Only unarchived notifications are removed. The selected limit applies immediately and is checked daily.")
+                .setItems(choices, (dialog, index) -> {
+                    int days = values[index];
+                    if (days == 0) {
+                        saveRetention(0, option);
+                    } else {
+                        new AlertDialog.Builder(this).setTitle("Use " + days + " days?")
+                                .setMessage("Unarchived notifications older than " + days
+                                        + " days will be deleted now and during daily cleanup. Archived notifications stay saved.")
+                                .setPositiveButton("Apply", (confirm, which) -> saveRetention(days, option))
+                                .setNegativeButton("Cancel", null).show();
+                    }
+                }).show();
+    }
+
+    private void saveRetention(int days, TextView option) {
+        getSharedPreferences("recall_settings", MODE_PRIVATE).edit().putInt("retention_days", days).apply();
+        RetentionJob.schedule(this);
+        database.cleanup(days);
+        option.setText("Auto clean up   •   " + retentionLabel(days));
+        refresh();
+    }
+
+    private void startPrivateExport() {
+        new AlertDialog.Builder(this).setTitle("Private export")
+                .setMessage("Choose a destination, then create a password of at least 8 characters. Recall encrypts the file on this device before writing it. Keep your password safe; it cannot be recovered.")
+                .setPositiveButton("Choose file", (d, which) -> {
+                    Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("application/octet-stream");
+                    String date = new java.text.SimpleDateFormat("yyyy-MM-dd",
+                            java.util.Locale.ROOT).format(new Date());
+                    intent.putExtra(Intent.EXTRA_TITLE, "Clatasha-Recall-" + date + ".recall");
+                    startActivityForResult(intent, REQUEST_EXPORT);
+                }).setNegativeButton("Cancel", null).show();
+    }
+
+    private void askExportPassword(Uri destination) {
+        LinearLayout form = column();
+        form.setPadding(dp(22), dp(8), dp(22), 0);
+        EditText password = new EditText(this);
+        password.setHint("Export password");
+        password.setSingleLine(true);
+        password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        form.addView(password);
+        EditText confirm = new EditText(this);
+        confirm.setHint("Confirm password");
+        confirm.setSingleLine(true);
+        confirm.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        form.addView(confirm);
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Encrypt export")
+                .setView(form).setPositiveButton("Encrypt & save", null)
+                .setNegativeButton("Cancel", null).create();
+        dialog.setOnShowListener(ignored ->
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                    char[] first = password.getText().toString().toCharArray();
+                    char[] second = confirm.getText().toString().toCharArray();
+                    boolean valid = first.length >= 8 && Arrays.equals(first, second);
+                    Arrays.fill(second, '\0');
+                    if (!valid) {
+                        Arrays.fill(first, '\0');
+                        password.setError("Enter matching passwords of at least 8 characters");
+                        return;
+                    }
+                    dialog.dismiss();
+                    new Thread(() -> {
+                        try {
+                            int count = PrivateExport.write(getApplicationContext(), destination, first);
+                            runOnUiThread(() -> Toast.makeText(this,
+                                    "Encrypted " + count + " notifications", Toast.LENGTH_LONG).show());
+                        } catch (Exception error) {
+                            runOnUiThread(() -> Toast.makeText(this,
+                                    "Export failed. Choose another file and try again.", Toast.LENGTH_LONG).show());
+                        }
+                    }, "Recall private export").start();
+                }));
+        dialog.show();
+    }
+
     private void chooseApps() {
         PackageManager pm = getPackageManager();
         Intent launcher = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
