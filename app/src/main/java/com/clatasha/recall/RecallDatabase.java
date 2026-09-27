@@ -33,6 +33,15 @@ final class RecallDatabase extends SQLiteOpenHelper {
         ContentValues row = new ContentValues();
         row.put("fingerprint", fingerprint); row.put("app", app); row.put("sender", sender);
         row.put("body", body); row.put("event_time", time);
+        // Messaging apps can repost the same notification with a new post time.
+        // Keep identical messages sent later, while collapsing immediate reposts.
+        try (Cursor recent = getReadableDatabase().rawQuery(
+                "SELECT 1 FROM entries WHERE app=? AND sender=? AND body=? "
+                + "AND event_time BETWEEN ? AND ? LIMIT 1",
+                new String[]{app, sender, body, Long.toString(time - 3000),
+                        Long.toString(time + 3000)})) {
+            if (recent.moveToFirst()) return;
+        }
         getWritableDatabase().insertWithOnConflict("entries", null, row, SQLiteDatabase.CONFLICT_IGNORE);
     }
 
@@ -49,6 +58,14 @@ final class RecallDatabase extends SQLiteOpenHelper {
             }
         }
         return entries;
+    }
+
+    synchronized void removeOldReposts() {
+        getWritableDatabase().execSQL(
+                "DELETE FROM entries WHERE EXISTS (SELECT 1 FROM entries AS previous "
+                + "WHERE previous.id < entries.id AND previous.app=entries.app "
+                + "AND previous.sender=entries.sender AND previous.body=entries.body "
+                + "AND ABS(previous.event_time - entries.event_time) <= 3000)");
     }
 
     synchronized void clear() { getWritableDatabase().delete("entries", null, null); }
