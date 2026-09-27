@@ -2,6 +2,7 @@ package com.clatasha.recall;
 
 import android.app.Notification;
 import android.content.SharedPreferences;
+import android.content.Intent;
 import android.os.Bundle;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
@@ -15,6 +16,7 @@ import java.util.concurrent.Executors;
 public final class RecallListener extends NotificationListenerService {
     static final String PREFS = "capture";
     static final String SELECTED = "selected_apps";
+    static final String ACTION_HISTORY_CHANGED = "com.clatasha.recall.HISTORY_CHANGED";
     private final ExecutorService writer = Executors.newSingleThreadExecutor();
 
     @Override public void onNotificationPosted(StatusBarNotification sbn) {
@@ -36,7 +38,11 @@ public final class RecallListener extends NotificationListenerService {
         String sender = title.isEmpty() ? app : title;
         String fingerprint = digest(app + "\u0000" + sender + "\u0000" + body + "\u0000" + time);
         final String savedBody = body;
-        writer.execute(() -> new RecallDatabase(getApplicationContext()).save(fingerprint, app, sender, savedBody, time));
+        writer.execute(() -> {
+            if (new RecallDatabase(getApplicationContext()).save(fingerprint, app, sender, savedBody, time)) {
+                sendBroadcast(new Intent(ACTION_HISTORY_CHANGED).setPackage(getPackageName()));
+            }
+        });
     }
 
     private static String clean(CharSequence value) {
