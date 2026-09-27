@@ -75,6 +75,7 @@ public final class MainActivity extends Activity {
         header.addView(heading, headSpace);
         heading.addView(label("CLATASHA", 11, MINT, true, 0));
         heading.addView(label("Recall", 29, WHITE, true, 0));
+        heading.addView(label("BUILD 0.1.1", 10, MUTED, true, 0));
 
         TextView tagline = label("YOUR MOMENTS, KEPT CLOSE", 10, MUTED, true, 0);
         LinearLayout.LayoutParams tagSpace = new LinearLayout.LayoutParams(-1, -2);
@@ -237,7 +238,9 @@ public final class MainActivity extends Activity {
         card.addView(row);
         ImageView appIcon = new ImageView(this);
         try { appIcon.setImageDrawable(getPackageManager().getApplicationIcon(first.app)); }
-        catch (PackageManager.NameNotFoundException ignored) { appIcon.setImageResource(R.drawable.ic_recall_mark); }
+        catch (PackageManager.NameNotFoundException ignored) {
+            appIcon.setImageResource(isWhatsApp(first.app) ? R.drawable.ic_chat_fallback : R.drawable.ic_recall_mark);
+        }
         appIcon.setContentDescription("Source app");
         appIcon.setPadding(dp(8), dp(8), dp(8), dp(8));
         appIcon.setBackground(gradient(0xff344c67, 0xff223952, dp(13), 0xff4a6882));
@@ -256,6 +259,10 @@ public final class MainActivity extends Activity {
             appName = getPackageManager().getApplicationLabel(
                     getPackageManager().getApplicationInfo(first.app, 0)).toString();
         } catch (PackageManager.NameNotFoundException ignored) {}
+        if (appName.equals(first.app)) {
+            if (first.app.equals("com.whatsapp.w4b")) appName = "WhatsApp Business";
+            else if (first.app.equals("com.whatsapp")) appName = "WhatsApp";
+        }
         titles.addView(label(appName, 11, MUTED, false, 0));
 
         TextView count = label(String.valueOf(group.size()), 12, MINT, true, Gravity.CENTER);
@@ -281,6 +288,10 @@ public final class MainActivity extends Activity {
             timeSpace.topMargin = dp(6);
             card.addView(time, timeSpace);
         }
+    }
+
+    private boolean isWhatsApp(String pkg) {
+        return pkg.equals("com.whatsapp") || pkg.equals("com.whatsapp.w4b");
     }
 
     private TextView action(String title, int color, int base, int border) {
