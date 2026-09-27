@@ -250,6 +250,66 @@ public final class MainActivity extends Activity {
         refresh();
     }
 
+    private boolean adsEnabled() {
+        return getSharedPreferences("recall_settings", MODE_PRIVATE).getBoolean("show_demo_ads", true);
+    }
+
+    private void setAdsEnabled(boolean enabled) {
+        getSharedPreferences("recall_settings", MODE_PRIVATE).edit()
+                .putBoolean("show_demo_ads", enabled).apply();
+        adSlot.setVisibility(enabled ? View.VISIBLE : View.GONE);
+        handler.removeCallbacks(rotateAds);
+        if (enabled && hasWindowFocus()) handler.postDelayed(rotateAds, 20000);
+    }
+
+    private void showBanner() {
+        if (adImage == null) return;
+        adImage.setImageResource(adIndex == 0 ? R.drawable.banner_bowetech : R.drawable.banner_advertise);
+        adImage.setContentDescription(adIndex == 0 ? "Bowetech web hosting advertisement"
+                : "Advertise in Clatasha Recall");
+        adCaption.setText(adIndex == 0 ? "SPONSORED   ·   BOWETECH   ·   1 / 2"
+                : "SPONSORED   ·   ADVERTISE HERE   ·   2 / 2");
+    }
+
+    private void showSettings() {
+        LinearLayout panel = column();
+        panel.setPadding(dp(20), dp(12), dp(20), dp(12));
+        TextView option = label(adsEnabled() ? "Show ads   •   On" : "Show ads   •   Off",
+                16, WHITE, true, 0);
+        option.setPadding(dp(12), dp(18), dp(12), dp(18));
+        option.setBackground(gradient(0xff263b54, 0xff182a42, dp(13), 0xff3e5c78));
+        panel.addView(option);
+        TextView detail = label("Demo banners rotate every 20 seconds. You can turn them off for free.",
+                12, MUTED, false, 0);
+        LinearLayout.LayoutParams detailSpace = new LinearLayout.LayoutParams(-1, -2);
+        detailSpace.topMargin = dp(12);
+        panel.addView(detail, detailSpace);
+        TextView title = label("Recall settings", 20, WHITE, true, 0);
+        title.setPadding(dp(22), dp(20), dp(20), dp(8));
+        AlertDialog dialog = new AlertDialog.Builder(this).setCustomTitle(title)
+                .setView(panel).setNegativeButton("Close", null).create();
+        option.setOnClickListener(v -> {
+            if (!adsEnabled()) {
+                setAdsEnabled(true);
+                option.setText("Show ads   •   On");
+            } else {
+                new AlertDialog.Builder(this)
+                        .setTitle("Turn off ads?")
+                        .setMessage("Ads help fund Clatasha Recall. You can turn them off for free.")
+                        .setPositiveButton("Turn off ads", (confirm, which) -> {
+                            setAdsEnabled(false);
+                            option.setText("Show ads   •   Off");
+                        })
+                        .setNegativeButton("Keep ads", null).show();
+            }
+        });
+        dialog.setOnShowListener(ignored -> {
+            dialog.getWindow().setBackgroundDrawable(gradient(0xff1b2d46, 0xff101d32, dp(20), 0xff41627e));
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(MINT);
+        });
+        dialog.show();
+    }
+
     private void chooseApps() {
         PackageManager pm = getPackageManager();
         Intent launcher = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
