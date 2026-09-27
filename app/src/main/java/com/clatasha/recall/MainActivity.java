@@ -128,7 +128,7 @@ public final class MainActivity extends Activity {
         header.addView(heading, headSpace);
         heading.addView(label("CLATASHA", 11, MINT, true, 0));
         heading.addView(label("Recall", 29, WHITE, true, 0));
-        heading.addView(label("BUILD 0.1.4", 10, MUTED, true, 0));
+        heading.addView(label("BUILD 0.1.5", 10, MUTED, true, 0));
         ImageView gear = new ImageView(this);
         gear.setImageResource(android.R.drawable.ic_menu_manage);
         gear.setColorFilter(MINT);
@@ -462,8 +462,16 @@ public final class MainActivity extends Activity {
         int[] values = {0, 7, 30, 90, 365};
         String[] choices = {"Off — keep saved notifications",
                 "7 days", "30 days", "90 days", "365 days"};
-        new AlertDialog.Builder(this).setTitle("Auto clean up")
-                .setMessage("Only unarchived notifications are removed. The selected limit applies immediately and is checked daily.")
+        LinearLayout heading = column();
+        heading.setPadding(dp(22), dp(18), dp(22), dp(10));
+        heading.addView(label("Auto clean up", 20, WHITE, true, 0));
+        TextView explanation = label(
+                "Choose how long to keep saved notifications. Archived notifications stay saved.",
+                13, MUTED, false, 0);
+        LinearLayout.LayoutParams explanationSpace = new LinearLayout.LayoutParams(-1, -2);
+        explanationSpace.topMargin = dp(8);
+        heading.addView(explanation, explanationSpace);
+        new AlertDialog.Builder(this).setCustomTitle(heading)
                 .setItems(choices, (dialog, index) -> {
                     int days = values[index];
                     if (days == 0) {
