@@ -259,7 +259,7 @@ public final class MainActivity extends Activity {
                 .putBoolean("show_demo_ads", enabled).apply();
         adSlot.setVisibility(enabled ? View.VISIBLE : View.GONE);
         handler.removeCallbacks(rotateAds);
-        if (enabled && hasWindowFocus()) handler.postDelayed(rotateAds, 20000);
+        if (enabled) handler.postDelayed(rotateAds, 20000);
     }
 
     private void showBanner() {
