@@ -53,6 +53,7 @@ public final class MainActivity extends Activity {
     private RecallDatabase database;
     private ScrollView historyScroll;
     private TextView undoBar;
+    private boolean archiveOpen = false;
     private final Set<String> expanded = new HashSet<>();
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Runnable hideUndo;
@@ -94,7 +95,7 @@ public final class MainActivity extends Activity {
         header.addView(heading, headSpace);
         heading.addView(label("CLATASHA", 11, MINT, true, 0));
         heading.addView(label("Recall", 29, WHITE, true, 0));
-        heading.addView(label("BUILD 0.1.2", 10, MUTED, true, 0));
+        heading.addView(label("BUILD 0.1.3", 10, MUTED, true, 0));
 
         TextView tagline = label("YOUR MOMENTS, KEPT CLOSE", 10, MUTED, true, 0);
         LinearLayout.LayoutParams tagSpace = new LinearLayout.LayoutParams(-1, -2);
@@ -308,14 +309,21 @@ public final class MainActivity extends Activity {
 
         int archivedCount = 0;
         for (List<RecallDatabase.Entry> group : archived.values()) archivedCount += group.size();
-        TextView archiveTitle = label("ARCHIVE  ·  " + archivedCount, 11, MINT, true, 0);
-        LinearLayout.LayoutParams archiveSpace = new LinearLayout.LayoutParams(-1, -2);
+        TextView archiveTitle = label("ARCHIVE  ·  " + archivedCount
+                + (archiveOpen ? "     ⌃" : "     ⌄"), 13, MINT, true, Gravity.CENTER_VERTICAL);
+        archiveTitle.setPadding(dp(16), 0, dp(16), 0);
+        archiveTitle.setBackground(gradient(0xff20344a, 0xff14243a, dp(15), 0xff34526a));
+        archiveTitle.setContentDescription(archiveOpen ? "Collapse Archive" : "Expand Archive");
+        archiveTitle.setOnClickListener(v -> { archiveOpen = !archiveOpen; refresh(); });
+        LinearLayout.LayoutParams archiveSpace = new LinearLayout.LayoutParams(-1, dp(48));
         archiveSpace.topMargin = dp(20);
         archiveSpace.bottomMargin = dp(12);
         results.addView(archiveTitle, archiveSpace);
-        if (archived.isEmpty()) {
-            results.addView(label("Archived notifications will appear here.", 12, MUTED, false, 0));
-        } else for (List<RecallDatabase.Entry> group : archived.values()) addConversation(group, true);
+        if (archiveOpen) {
+            if (archived.isEmpty()) {
+                results.addView(label("Archived notifications will appear here.", 12, MUTED, false, 0));
+            } else for (List<RecallDatabase.Entry> group : archived.values()) addConversation(group, true);
+        }
         historyScroll.post(() -> historyScroll.scrollTo(0, scrollY));
     }
 
@@ -397,11 +405,12 @@ public final class MainActivity extends Activity {
             @Override public boolean onTouch(View view, MotionEvent event) {
                 switch (event.getActionMasked()) {
                     case MotionEvent.ACTION_DOWN:
-                        startX = event.getX(); startY = event.getY(); dragging = false;
+                        view.animate().cancel();
+                        startX = event.getRawX(); startY = event.getRawY(); dragging = false;
                         return true;
                     case MotionEvent.ACTION_MOVE:
-                        float dx = event.getX() - startX;
-                        float dy = event.getY() - startY;
+                        float dx = event.getRawX() - startX;
+                        float dy = event.getRawY() - startY;
                         if (!dragging && Math.abs(dx) > slop && Math.abs(dx) > Math.abs(dy)) {
                             dragging = true;
                             view.getParent().requestDisallowInterceptTouchEvent(true);
@@ -412,7 +421,7 @@ public final class MainActivity extends Activity {
                         }
                         break;
                     case MotionEvent.ACTION_UP:
-                        float distance = event.getX() - startX;
+                        float distance = event.getRawX() - startX;
                         view.animate().translationX(0).setDuration(160).start();
                         if (dragging && Math.abs(distance) >= dp(75)) {
                             applySwipe(entry, distance > 0);
