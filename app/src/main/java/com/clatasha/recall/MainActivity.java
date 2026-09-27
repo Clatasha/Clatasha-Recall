@@ -7,11 +7,11 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.text.Editable;
 import android.text.TextWatcher;
-import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -90,8 +90,13 @@ public final class MainActivity extends Activity {
 
     private void chooseApps() {
         PackageManager pm = getPackageManager();
-        List<ApplicationInfo> installed = new ArrayList<>(pm.getInstalledApplications(0));
-        installed.removeIf(info -> (info.flags & ApplicationInfo.FLAG_SYSTEM) != 0 || info.packageName.equals(getPackageName()));
+        Intent launcher = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
+        List<ApplicationInfo> installed = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (ResolveInfo result : pm.queryIntentActivities(launcher, 0)) {
+            String pkg = result.activityInfo.packageName;
+            if (!pkg.equals(getPackageName()) && seen.add(pkg)) installed.add(result.activityInfo.applicationInfo);
+        }
         installed.sort(Comparator.comparing(info -> pm.getApplicationLabel(info).toString().toLowerCase(java.util.Locale.ROOT)));
         String[] names = new String[installed.size()];
         Set<String> chosen = new HashSet<>(getSharedPreferences(RecallListener.PREFS, MODE_PRIVATE)
