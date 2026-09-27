@@ -269,6 +269,79 @@ public final class MainActivity extends Activity {
         refresh();
     }
 
+    private boolean lockEnabled() {
+        return getSharedPreferences("recall_settings", MODE_PRIVATE).getBoolean("app_lock", false);
+    }
+
+    private void requestUnlock(boolean enabling) {
+        KeyguardManager guard = getSystemService(KeyguardManager.class);
+        if (guard == null || !guard.isDeviceSecure()) {
+            new AlertDialog.Builder(this).setTitle("Set a screen lock first")
+                    .setMessage("Recall uses your phone's screen lock. Set a PIN, pattern or password in Android Settings, then return to enable app lock.")
+                    .setPositiveButton("Open Settings", (d, which) ->
+                            startActivity(new Intent(Settings.ACTION_SECURITY_SETTINGS)))
+                    .setNegativeButton("Cancel", null).show();
+            if (!enabling) finish();
+            return;
+        }
+        authInProgress = true;
+        if (!enabling) rootView.setVisibility(View.INVISIBLE);
+        if (Build.VERSION.SDK_INT >= 30) {
+            BiometricPrompt prompt = new BiometricPrompt.Builder(this)
+                    .setTitle(enabling ? "Enable Recall lock" : "Unlock Clatasha Recall")
+                    .setSubtitle("Use your fingerprint or device screen lock")
+                    .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG
+                            | BiometricManager.Authenticators.DEVICE_CREDENTIAL)
+                    .build();
+            prompt.authenticate(new CancellationSignal(), getMainExecutor(),
+                    new BiometricPrompt.AuthenticationCallback() {
+                        @Override public void onAuthenticationSucceeded(
+                                BiometricPrompt.AuthenticationResult result) {
+                            completeUnlock(true, enabling);
+                        }
+                        @Override public void onAuthenticationError(int code, CharSequence message) {
+                            completeUnlock(false, enabling);
+                        }
+                    });
+        } else {
+            Intent intent = guard.createConfirmDeviceCredentialIntent(
+                    "Clatasha Recall", "Confirm your device screen lock");
+            if (intent == null) { completeUnlock(false, enabling); return; }
+            startActivityForResult(intent, enabling ? REQUEST_ENABLE_LOCK : REQUEST_UNLOCK);
+        }
+    }
+
+    private void completeUnlock(boolean success, boolean enabling) {
+        authInProgress = false;
+        if (success) {
+            if (enabling) getSharedPreferences("recall_settings", MODE_PRIVATE).edit()
+                    .putBoolean("app_lock", true).apply();
+            rootView.setVisibility(View.VISIBLE);
+            if (pendingExportUri != null) {
+                Uri target = pendingExportUri;
+                pendingExportUri = null;
+                askExportPassword(target);
+            }
+        } else if (!enabling) {
+            pendingExportUri = null;
+            finish();
+        } else {
+            rootView.setVisibility(View.VISIBLE);
+        }
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_UNLOCK || requestCode == REQUEST_ENABLE_LOCK) {
+            completeUnlock(resultCode == RESULT_OK, requestCode == REQUEST_ENABLE_LOCK);
+        } else if (requestCode == REQUEST_EXPORT && resultCode == RESULT_OK
+                && data != null && data.getData() != null) {
+            if (lockEnabled() && rootView.getVisibility() != View.VISIBLE) {
+                pendingExportUri = data.getData();
+            } else askExportPassword(data.getData());
+        }
+    }
+
     private boolean adsEnabled() {
         return getSharedPreferences("recall_settings", MODE_PRIVATE).getBoolean("show_demo_ads", true);
     }
