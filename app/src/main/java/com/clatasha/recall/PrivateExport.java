@@ -3,7 +3,6 @@ package com.clatasha.recall;
 import android.content.Context;
 import android.net.Uri;
 
-import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.IOException;
@@ -24,10 +23,8 @@ final class PrivateExport {
     private static final int ITERATIONS = 210000;
 
     static int write(Context context, Uri destination, char[] password) throws Exception {
-        byte[] plain = null;
         byte[] secret = null;
-        try {
-            RecallDatabase database = new RecallDatabase(context);
+        try (RecallDatabase database = new RecallDatabase(context)) {
             List<RecallDatabase.Entry> entries = database.allForExport();
             SecureRandom random = new SecureRandom();
             byte[] salt = new byte[16];
@@ -76,11 +73,9 @@ final class PrivateExport {
                     writer.write("]}");
                 }
             }
-            database.close();
             return entries.size();
         } finally {
             Arrays.fill(password, '\0');
-            if (plain != null) Arrays.fill(plain, (byte) 0);
             if (secret != null) Arrays.fill(secret, (byte) 0);
         }
     }
