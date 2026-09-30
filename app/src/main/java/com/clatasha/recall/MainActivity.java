@@ -59,6 +59,8 @@ public final class MainActivity extends Activity {
     private static final int REQUEST_UNLOCK = 410;
     private static final int REQUEST_ENABLE_LOCK = 411;
     private static final int REQUEST_EXPORT = 412;
+    private static final int REQUEST_IMAGE = 413;
+    private byte[] pendingImage;
     private LinearLayout rootView;
     private boolean authInProgress;
     private Uri pendingExportUri;
@@ -128,7 +130,7 @@ public final class MainActivity extends Activity {
         header.addView(heading, headSpace);
         heading.addView(label("CLATASHA", 11, MINT, true, 0));
         heading.addView(label("Recall", 29, WHITE, true, 0));
-        heading.addView(label("BUILD 0.1.5", 10, MUTED, true, 0));
+        heading.addView(label("BUILD 0.1.6", 10, MUTED, true, 0));
         ImageView gear = new ImageView(this);
         gear.setImageResource(android.R.drawable.ic_menu_manage);
         gear.setColorFilter(MINT);
@@ -346,6 +348,21 @@ public final class MainActivity extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_UNLOCK || requestCode == REQUEST_ENABLE_LOCK) {
             completeUnlock(resultCode == RESULT_OK, requestCode == REQUEST_ENABLE_LOCK);
+        } else if (requestCode == REQUEST_IMAGE) {
+            byte[] image = pendingImage;
+            pendingImage = null;
+            if (resultCode == RESULT_OK && data != null && data.getData() != null && image != null) {
+                Uri destination = data.getData();
+                new Thread(() -> {
+                    try (java.io.OutputStream output = getContentResolver().openOutputStream(destination, "w")) {
+                        if (output == null) throw new java.io.IOException();
+                        output.write(image);
+                        runOnUiThread(() -> Toast.makeText(this, "Image saved", Toast.LENGTH_SHORT).show());
+                    } catch (Exception error) {
+                        runOnUiThread(() -> Toast.makeText(this, "Could not save image", Toast.LENGTH_LONG).show());
+                    }
+                }, "Recall image export").start();
+            }
         } else if (requestCode == REQUEST_EXPORT && resultCode == RESULT_OK
                 && data != null && data.getData() != null) {
             if (lockEnabled() && rootView.getVisibility() != View.VISIBLE) {
@@ -394,6 +411,20 @@ public final class MainActivity extends Activity {
         optionSpace.topMargin = dp(13);
         panel.addView(retention, optionSpace);
         retention.setOnClickListener(v -> chooseRetention(retention));
+
+        TextView images = settingsOption("Save notification images   •   "
+                + (NotificationImages.enabled(this) ? "On" : "Off"));
+        LinearLayout.LayoutParams imageSpace = new LinearLayout.LayoutParams(-1, -2);
+        imageSpace.topMargin = dp(10);
+        panel.addView(images, imageSpace);
+        images.setOnClickListener(v -> {
+            boolean enabled = !NotificationImages.enabled(this);
+            getSharedPreferences("recall_settings", MODE_PRIVATE).edit().putBoolean("save_images", enabled).apply();
+            images.setText("Save notification images   •   " + (enabled ? "On" : "Off"));
+        });
+        TextView imageDetail = label("Saves available previews from selected apps. Turning off affects new notifications.",
+                12, MUTED, false, 0);
+        panel.addView(imageDetail);
 
         TextView lock = settingsOption(lockEnabled() ? "App lock   •   On" : "App lock   •   Off");
         LinearLayout.LayoutParams lockSpace = new LinearLayout.LayoutParams(-1, -2);
@@ -736,6 +767,22 @@ public final class MainActivity extends Activity {
         item.setPadding(dp(16), dp(11), dp(16), dp(11));
         card.addView(item);
         item.addView(label(entry.text, 14, WHITE, false, 0));
+        if (entry.hasImage) {
+            byte[] bytes = database.image(entry.id);
+            android.graphics.Bitmap bitmap = bytes == null ? null
+                    : android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+            if (bitmap != null) {
+                ImageView thumbnail = new ImageView(this);
+                thumbnail.setImageBitmap(bitmap);
+                thumbnail.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                thumbnail.setContentDescription("Saved notification image. Tap to view.");
+                LinearLayout.LayoutParams imageSpace = new LinearLayout.LayoutParams(-1, dp(140));
+                imageSpace.topMargin = dp(10);
+                item.addView(thumbnail, imageSpace);
+                thumbnail.setOnClickListener(v -> showImage(bytes));
+                item.addView(label("IMAGE PREVIEW  ·  Tap to view or save", 10, MINT, false, 0));
+            }
+        }
         String time = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
                 .format(new Date(entry.time));
         TextView meta = label(time + "    •    Swipe → " + (entry.archived ? "Restore" : "Archive")
@@ -801,8 +848,9 @@ public final class MainActivity extends Activity {
             reverse = () -> database.setArchived(entry.id, entry.archived);
             title = newState ? "Archived" : "Restored";
         } else {
+            byte[] image = database.image(entry.id);
             database.delete(entry.id);
-            reverse = () -> database.restore(entry);
+            reverse = () -> database.restore(entry, image);
             title = "Deleted";
         }
         refresh();
@@ -819,6 +867,26 @@ public final class MainActivity extends Activity {
         });
         hideUndo = () -> { undoAction = null; undoBar.setVisibility(View.GONE); };
         handler.postDelayed(hideUndo, 6000);
+    }
+
+    private void showImage(byte[] image) {
+        android.graphics.Bitmap bitmap = android.graphics.BitmapFactory.decodeByteArray(image, 0, image.length);
+        if (bitmap == null) return;
+        ImageView viewer = new ImageView(this);
+        viewer.setImageBitmap(bitmap);
+        viewer.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        viewer.setPadding(dp(12), dp(12), dp(12), dp(12));
+        LinearLayout panel = column();
+        panel.addView(viewer, new LinearLayout.LayoutParams(-1, dp(320)));
+        new AlertDialog.Builder(this).setTitle("Saved notification image").setView(panel)
+                .setPositiveButton("Save image", (dialog, which) -> {
+                    pendingImage = image;
+                    Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.setType("image/jpeg");
+                    intent.putExtra(Intent.EXTRA_TITLE, "Recall-image-" + System.currentTimeMillis() + ".jpg");
+                    startActivityForResult(intent, REQUEST_IMAGE);
+                }).setNegativeButton("Close", null).show();
     }
 
     private String displayName(String pkg) {
