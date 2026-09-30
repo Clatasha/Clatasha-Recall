@@ -33,14 +33,20 @@ public final class RecallListener extends NotificationListenerService {
         String title = clean(extras.getCharSequence(Notification.EXTRA_TITLE));
         String body = clean(extras.getCharSequence(Notification.EXTRA_BIG_TEXT));
         if (body.isEmpty()) body = clean(extras.getCharSequence(Notification.EXTRA_TEXT));
-        if (body.isEmpty()) return;
+
         long time = sbn.getPostTime();
         String sender = title.isEmpty() ? app : title;
-        String fingerprint = digest(app + "\u0000" + sender + "\u0000" + body + "\u0000" + time);
         final String savedBody = body;
         writer.execute(() -> {
-            if (new RecallDatabase(getApplicationContext()).save(fingerprint, app, sender, savedBody, time)) {
+            byte[] image = NotificationImages.capture(getApplicationContext(), notification);
+            if (savedBody.isEmpty() && image == null) return;
+            String text = savedBody.isEmpty() ? "Image" : savedBody;
+            String fingerprint = digest(app + "\u0000" + sender + "\u0000" + text + "\u0000"
+                    + time + "\u0000" + java.util.Arrays.hashCode(image));
+            try (RecallDatabase db = new RecallDatabase(getApplicationContext())) {
+            if (db.save(fingerprint, app, sender, text, time, image)) {
                 sendBroadcast(new Intent(ACTION_HISTORY_CHANGED).setPackage(getPackageName()));
+            }
             }
         });
     }
