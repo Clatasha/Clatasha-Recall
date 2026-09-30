@@ -27,23 +27,8 @@ final class PrivateExport {
         byte[] plain = null;
         byte[] secret = null;
         try {
-            List<RecallDatabase.Entry> entries = new RecallDatabase(context).allForExport();
-            JSONArray records = new JSONArray();
-            for (RecallDatabase.Entry entry : entries) {
-                JSONObject record = new JSONObject();
-                record.put("app", entry.app);
-                record.put("sender", entry.sender);
-                record.put("body", entry.text);
-                record.put("time", entry.time);
-                record.put("archived", entry.archived);
-                records.put(record);
-            }
-            JSONObject document = new JSONObject();
-            document.put("format", "Clatasha Recall encrypted export");
-            document.put("version", 1);
-            document.put("entries", records);
-            plain = document.toString().getBytes(StandardCharsets.UTF_8);
-
+            RecallDatabase database = new RecallDatabase(context);
+            List<RecallDatabase.Entry> entries = database.allForExport();
             SecureRandom random = new SecureRandom();
             byte[] salt = new byte[16];
             byte[] nonce = new byte[12];
@@ -60,14 +45,38 @@ final class PrivateExport {
             cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(secret, "AES"),
                     new GCMParameterSpec(128, nonce));
             cipher.updateAAD(MAGIC);
-            byte[] encrypted = cipher.doFinal(plain);
+
             try (OutputStream output = context.getContentResolver().openOutputStream(destination, "w")) {
                 if (output == null) throw new IOException("Could not open export destination");
                 output.write(MAGIC);
                 output.write(salt);
                 output.write(nonce);
-                output.write(encrypted);
+                try (java.io.Writer writer = new java.io.OutputStreamWriter(
+                        new javax.crypto.CipherOutputStream(output, cipher), StandardCharsets.UTF_8)) {
+                    writer.write("{\"format\":\"Clatasha Recall encrypted export\",\"version\":2,\"entries\":[");
+                    boolean first = true;
+                    for (RecallDatabase.Entry entry : entries) {
+                        JSONObject record = new JSONObject();
+                        record.put("app", entry.app);
+                        record.put("sender", entry.sender);
+                        record.put("body", entry.text);
+                        record.put("time", entry.time);
+                        record.put("archived", entry.archived);
+                        byte[] image = database.image(entry.id);
+                        if (image != null) {
+                            JSONObject attachment = new JSONObject();
+                            attachment.put("mime", "image/jpeg");
+                            attachment.put("base64", android.util.Base64.encodeToString(image, android.util.Base64.NO_WRAP));
+                            record.put("image", attachment);
+                        }
+                        if (!first) writer.write(",");
+                        first = false;
+                        writer.write(record.toString());
+                    }
+                    writer.write("]}");
+                }
             }
+            database.close();
             return entries.size();
         } finally {
             Arrays.fill(password, '\0');
