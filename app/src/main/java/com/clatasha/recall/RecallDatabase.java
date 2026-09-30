@@ -109,6 +109,7 @@ final class RecallDatabase extends SQLiteOpenHelper {
                 "DELETE FROM entries WHERE EXISTS (SELECT 1 FROM entries AS previous "
                 + "WHERE previous.id < entries.id AND previous.app=entries.app "
                 + "AND previous.sender=entries.sender AND previous.body=entries.body "
+                + "AND previous.image IS entries.image "
                 + "AND ABS(previous.event_time - entries.event_time) <= 3000)");
     }
 
