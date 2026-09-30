@@ -11,7 +11,6 @@ import android.net.Uri;
 import android.os.Build;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
-import java.util.List;
 
 final class NotificationImages {
     static final int MAX_BYTES = 256 * 1024;
@@ -23,19 +22,26 @@ final class NotificationImages {
     static byte[] capture(Context context, Notification notification) {
         if (!enabled(context)) return null;
         try {
-            Notification.MessagingStyle style =
-                    Notification.MessagingStyle.extractMessagingStyleFromNotification(notification);
-            if (style != null) {
-                List<Notification.MessagingStyle.Message> messages = style.getMessages();
-                // Only inspect the latest message, so an old attachment isn't paired with new text.
-                if (!messages.isEmpty()) {
-                    Notification.MessagingStyle.Message message = messages.get(messages.size() - 1);
-                    String mime = message.getDataMimeType();
-                    Uri uri = message.getDataUri();
-                    if (mime != null && mime.startsWith("image/") && uri != null
-                            && "content".equals(uri.getScheme())) {
-                        byte[] image = fromUri(context, uri);
-                        if (image != null) return image;
+            android.os.Parcelable[] messages = notification.extras.getParcelableArray(Notification.EXTRA_MESSAGES);
+            if (messages != null && messages.length > 0
+                    && messages[messages.length - 1] instanceof android.os.Bundle) {
+                android.os.Bundle latest = (android.os.Bundle) messages[messages.length - 1];
+                long latestTime = latest.getLong("time", -1);
+                // Android stores a caption and image as separate messages sharing a timestamp.
+                // Limit the search to that latest timestamp to avoid attaching an old photo.
+                for (int i = messages.length - 1; i >= 0; i--) {
+                    if (!(messages[i] instanceof android.os.Bundle)) continue;
+                    android.os.Bundle message = (android.os.Bundle) messages[i];
+                    if (i != messages.length - 1
+                            && (latestTime < 0 || message.getLong("time", -2) != latestTime)) break;
+                    String mime = message.getString("type");
+                    Object value = message.getParcelable("uri");
+                    if (mime != null && mime.startsWith("image/") && value instanceof Uri) {
+                        Uri uri = (Uri) value;
+                        if ("content".equals(uri.getScheme())) {
+                            byte[] image = fromUri(context, uri);
+                            if (image != null) return image;
+                        }
                     }
                 }
             }
